@@ -1,0 +1,1 @@
+Analyze the supplied TypeScript application's architecture and create a Mermaid state diagram describing its state hierarchy and transitions. Represent composite states and independent state dimensions where supported by the source code. Ground the diagram in the implementation. Return one Mermaid code block beginning with stateDiagram-v2 as your final answer.
