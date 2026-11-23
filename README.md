@@ -30,7 +30,7 @@ To select a particular project inside the dropbox:
 python3 start.py --provider anthropic --source dropbox/my-app
 ```
 
-Edit `task.txt` to set the task shared across runs, or pass `--task path/to/task.txt`. Other options are `--model`, `--effort`, `--max-turns`, `--max-output-tokens`, and `--timeout`. Defaults are medium effort, 100 inference turns, 16,384 output tokens per request, and a 600-second request timeout. Provider effort labels do not establish equivalent computational budgets across models.
+The task is fixed: the user turn is always the literal word `Begin`, and every actual instruction lives in the system prompt (`bench/SystemPrompt/Prompt.md` plus `bench/SystemPrompt/Example.md`), so there is one source of instructions, not two. Other options are `--model`, `--effort`, `--max-turns`, `--max-output-tokens`, and `--timeout`. Defaults are medium effort, 100 inference turns, 16,384 output tokens per request, and a 600-second request timeout. Provider effort labels do not establish equivalent computational budgets across models.
 
 Each invocation starts a fresh conversation and creates `output/<UTC timestamp>/`.
 
@@ -39,6 +39,7 @@ Each invocation starts a fresh conversation and creates `output/<UTC timestamp>/
 | File | Contents |
 | --- | --- |
 | `diagram.mmd` | Final Mermaid state diagram, without Markdown fences. |
+| `diagram.png` | Rendered diagram, produced automatically from `diagram.mmd` via `@mermaid-js/mermaid-cli` once the run completes. Absent if rendering failed (e.g. `npx` unavailable); the run itself still counts as completed. |
 | `answer.md` | The model's unmodified final answer. |
 | `trajectory.jsonl` | Timestamped requests, responses, reasoning summaries, tool calls and results, token usage, durations, and errors. |
 | `run.json` | Run status, provider, model, prompts, source root, limits, start/end times, and error if present. |

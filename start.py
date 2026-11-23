@@ -1,5 +1,6 @@
 import argparse
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from bench.agent.agent import Agent, SYSTEM
 from bench.agent.inference import Inference
 from bench.agent.tools import EXCLUDED, ProjectTools
 from bench.log import RunLog, utc_now
+
+TASK = "Begin"
 
 
 def positive(value: str) -> int:
@@ -22,7 +25,6 @@ def main() -> int:
     parser.add_argument("--provider", choices=config.MODELS, default=config.DEFAULT_PROVIDER)
     parser.add_argument("--model")
     parser.add_argument("--source", type=Path, default=config.SOURCE_DIR)
-    parser.add_argument("--task", type=Path, default=config.TASK_PATH)
     parser.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"], default=config.DEFAULT_EFFORT)
     parser.add_argument("--max-turns", type=positive, default=config.MAX_TURNS)
     parser.add_argument("--max-output-tokens", type=positive, default=config.MAX_OUTPUT_TOKENS)
@@ -36,9 +38,6 @@ def main() -> int:
     if not source.is_dir() or not source.is_relative_to(config.SOURCE_DIR.resolve()):
         parser.error("--source must be a directory inside dropbox/")
     tools = ProjectTools(source)
-    task = args.task.read_text(encoding="utf-8")
-    if not task.strip():
-        parser.error("Task is empty")
     model = args.model or config.MODELS[args.provider]
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     directory = config.OUTPUT_DIR / run_id
@@ -49,7 +48,7 @@ def main() -> int:
         "provider": args.provider, "model": model, "source": str(source),
         "effort": args.effort, "max_turns": args.max_turns,
         "max_output_tokens": args.max_output_tokens, "timeout_seconds": args.timeout,
-        "task": task, "system_prompt": SYSTEM, "excluded_names": sorted(EXCLUDED),
+        "task": TASK, "system_prompt": SYSTEM, "excluded_names": sorted(EXCLUDED),
         "excludes_env_files_and_symlinks": True, "reasoning_capture": "provider summaries",
     }
     log.save("run.json", metadata)
@@ -59,7 +58,7 @@ def main() -> int:
     exit_code = 0
     try:
         inference = Inference(args.provider, model, api_key, args.effort, args.max_output_tokens, args.timeout)
-        answer = Agent(inference, tools, log.write, args.max_turns).run(task)
+        answer = Agent(inference, tools, log.write, args.max_turns).run(TASK)
         (directory / "answer.md").write_text(answer + "\n", encoding="utf-8")
         blocks = re.findall(r"^```mermaid\s*\n(.*?)^```\s*$", answer, re.MULTILINE | re.DOTALL)
         diagram = blocks[0].strip() if len(blocks) == 1 else answer.strip()
@@ -70,6 +69,19 @@ def main() -> int:
         metadata["status"] = "completed"
         metadata["diagram"] = "diagram.mmd"
         print(f"Diagram: {directory / 'diagram.mmd'}", flush=True)
+        try:
+            render = subprocess.run(
+                ["npx", "-y", "@mermaid-js/mermaid-cli", "-i", str(directory / "diagram.mmd"),
+                 "-o", str(directory / "diagram.png"), "--size", "4000", "-s", "3", "-b", "white"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if render.returncode == 0:
+                metadata["diagram_png"] = "diagram.png"
+                print(f"Rendered: {directory / 'diagram.png'}", flush=True)
+            else:
+                print(f"Diagram render failed: {render.stderr.strip()}", flush=True)
+        except (OSError, subprocess.TimeoutExpired) as render_exc:
+            print(f"Diagram render failed: {render_exc}", flush=True)
     except (Exception, KeyboardInterrupt) as exc:
         metadata["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
         metadata["error"] = f"{type(exc).__name__}: {exc}".replace(api_key, "[redacted]")

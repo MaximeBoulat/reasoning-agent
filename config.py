@@ -19,7 +19,6 @@ _load_env(PROJECT_DIR / ".env")
 
 SOURCE_DIR = PROJECT_DIR / "dropbox"
 OUTPUT_DIR = PROJECT_DIR / "output"
-TASK_PATH = PROJECT_DIR / "task.txt"
 DEFAULT_PROVIDER = "anthropic"
 MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-6.1-sol"}
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
