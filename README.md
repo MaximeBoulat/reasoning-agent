@@ -11,6 +11,7 @@ Place the application's source code in `dropbox/`, either directly or inside a p
 ```dotenv
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
+GOOGLE_API_KEY=
 ```
 
 `config.py` loads `.env` automatically and defines the model, path, and run defaults. Existing environment variables take precedence over `.env` values. Command-line options override the corresponding config defaults. `.env` is excluded from Git.
@@ -20,9 +21,12 @@ From the ReasoningAgent directory:
 ```sh
 python3 start.py --provider anthropic
 python3 start.py --provider openai
+python3 start.py --provider google
 ```
 
-The default models are `claude-sonnet-5-5` and `gpt-6.1-sol`, respectively. A run uses one provider and one model throughout.
+The default models are `claude-sonnet-5-5`, `gpt-6.1-sol`, and `gemini-4-neon`, respectively. A run uses one provider and one model throughout. Pass `--model` to use a different model on the same provider, e.g. `--provider anthropic --model claude-opus-5-5` or `--provider openai --model gpt-6.2-sol` — this works with no code change, since `--model` is never validated against a fixed list. Reachable Gemini models include `gemini-4-argon`, `gemini-4-carbon`, `gemini-4-hydrogen`, and `gemini-4-neon`.
+
+The Google integration uses the standard `generateContent` endpoint (`POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`), matching the request/response shape already proven in this codebase's own `GeminiAdapter.ts` (`server-sdk/src/AgenticWorkspace/AgentOperation/Requests/LLMRequest/`): `contents` built from `functionCall`/`functionResponse` parts, full history resent each turn, no server-side conversation state.
 
 To select a particular project inside the dropbox:
 

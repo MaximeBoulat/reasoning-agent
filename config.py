@@ -20,10 +20,11 @@ _load_env(PROJECT_DIR / ".env")
 SOURCE_DIR = PROJECT_DIR / "dropbox"
 OUTPUT_DIR = PROJECT_DIR / "output"
 DEFAULT_PROVIDER = "anthropic"
-MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-6.1-sol"}
+MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-6.1-sol", "google": "gemini-4-neon"}
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-API_KEYS = {"anthropic": ANTHROPIC_API_KEY, "openai": OPENAI_API_KEY}
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+API_KEYS = {"anthropic": ANTHROPIC_API_KEY, "openai": OPENAI_API_KEY, "google": GOOGLE_API_KEY}
 DEFAULT_EFFORT = "medium"
 MAX_TURNS = 100
 MAX_OUTPUT_TOKENS = 16384

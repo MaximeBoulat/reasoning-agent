@@ -4,6 +4,16 @@ import urllib.request
 from dataclasses import dataclass
 
 
+def _gemini_schema(schema: dict) -> dict:
+    """Gemini's function-declaration parameters use a restricted OpenAPI subset that
+    rejects plain JSON Schema keywords like additionalProperties; strip them recursively."""
+    if isinstance(schema, dict):
+        return {k: _gemini_schema(v) for k, v in schema.items() if k != "additionalProperties"}
+    if isinstance(schema, list):
+        return [_gemini_schema(item) for item in schema]
+    return schema
+
+
 @dataclass
 class Turn:
     calls: list[dict]
@@ -21,9 +31,13 @@ class Inference:
         self.max_tokens = max_tokens
         self.timeout = timeout
         self.history = []
+        self.call_names = {}
 
     def begin(self, task: str) -> None:
-        self.history = [{"role": "user", "content": task}]
+        if self.provider == "google":
+            self.history = [{"role": "user", "parts": [{"text": task}]}]
+        else:
+            self.history = [{"role": "user", "content": task}]
 
     def payload(self, system: str, schemas: list[dict]) -> dict:
         if self.provider == "openai":
@@ -33,6 +47,15 @@ class Inference:
                 "parallel_tool_calls": False, "store": False,
                 "reasoning": {"effort": self.effort, "summary": "auto"},
                 "max_output_tokens": self.max_tokens,
+            }
+        elif self.provider == "google":
+            result = {
+                "contents": self.history,
+                "systemInstruction": {"parts": [{"text": system}]},
+                "tools": [{"functionDeclarations": [
+                    {"name": s["name"], "description": s["description"], "parameters": _gemini_schema(s["parameters"])}
+                    for s in schemas
+                ]}],
             }
         else:
             result = {
@@ -48,6 +71,9 @@ class Inference:
         if self.provider == "openai":
             url = "https://api.openai.com/v1/responses"
             headers = {"Authorization": f"Bearer {self.api_key}"}
+        elif self.provider == "google":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+            headers = {"x-goog-api-key": self.api_key}
         else:
             url = "https://api.anthropic.com/v1/messages"
             headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
@@ -63,7 +89,19 @@ class Inference:
 
     def accept(self, body: dict) -> Turn:
         calls, texts, reasoning = [], [], []
-        if self.provider == "openai":
+        if self.provider == "google":
+            parts = body["candidates"][0].get("content", {}).get("parts", [])
+            self.history.append({"role": "model", "parts": parts})
+            for i, part in enumerate(parts):
+                if "functionCall" in part:
+                    fc = part["functionCall"]
+                    call_id = fc.get("id") or f"{fc['name']}_{i}"
+                    calls.append({"id": call_id, "name": fc["name"], "arguments": fc.get("args", {})})
+                elif "text" in part:
+                    texts.append(part["text"])
+            self.call_names = {call["id"]: call["name"] for call in calls}
+            finished = not calls
+        elif self.provider == "openai":
             if body["status"] != "completed":
                 raise RuntimeError(f"OpenAI response did not complete: {body.get('incomplete_details') or body.get('error') or body['status']}")
             self.history.extend(body["output"])
@@ -95,7 +133,14 @@ class Inference:
         return Turn(calls, "\n".join(texts), reasoning, finished)
 
     def add_results(self, results: list[dict]) -> None:
-        if self.provider == "openai":
+        if self.provider == "google":
+            if results:
+                self.history.append({"role": "user", "parts": [
+                    {"functionResponse": {"id": item["id"], "name": self.call_names.get(item["id"], ""),
+                                           "response": {"output": json.dumps(item["result"])}}}
+                    for item in results
+                ]})
+        elif self.provider == "openai":
             self.history.extend({"type": "function_call_output", "call_id": item["id"],
                                  "output": json.dumps(item["result"])} for item in results)
         elif results:
